@@ -11,26 +11,31 @@ import (
 )
 
 var (
-	iface = flag.String("i", "eth0", "Interface to configure via DHCP")
-	dnsTargets = flag.String("d", "", "DNS servers to probe, separate by comma.")
-	dnsQname = flag.String("r", "healthcheck.event.dreamhack.se.", "DNS healthcheck qname to probe.")
-	interval = flag.Duration("s", time.Second * 5, "Collection interval")
-	verbose = flag.Bool("v", false, "Verbose")
+	iface = flag.String("interface", "eth0", "Interface to configure via DHCP")
+	dnsTargets = flag.String("dns", "", "DNS servers to probe, separate by comma.")
+	icmpTargets = flag.String("icmp", "", "ICMP target.")
+	icmpCount = flag.Int("icmp-count", 3, "ICMP count.")
+	dnsQname = flag.String("qname", "healthcheck.event.dreamhack.se.", "DNS healthcheck qname to probe.")
+	interval = flag.Duration("interval", time.Second * 5, "Collection interval")
+	verbose = flag.Bool("verbose", false, "Verbose")
 )
 
 func main() {
 	flag.Parse()
 	fmt.Println("Starting observer.")
-	if *dnsTargets == "" {
-		panic("No DNS targets supplied")
-	}
 	dnsTargetsList := strings.Split(*dnsTargets, ",")
+	icmpTargetsList := strings.Split(*icmpTargets, ",")
 	http.Handle("/metrics", promhttp.Handler())
 
 	go func(){
 		for {
 			sampleDhcp(*iface, *verbose)
-			sampleDns(dnsTargetsList, *dnsQname)
+			if len(dnsTargetsList) > 0 {
+				sampleDns(dnsTargetsList, *dnsQname)
+			}
+			if len(icmpTargetsList) > 0 {
+				sampleIcmp(icmpTargetsList, *icmpCount)
+			}
 			time.Sleep(*interval)
 		}
 	}()
