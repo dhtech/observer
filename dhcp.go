@@ -12,23 +12,23 @@ import (
 
 var (
 	dhcpRequests = promauto.NewCounter(prometheus.CounterOpts{
-			Name: "dhcp_requests",
+			Name: "observer_dhcp_requests",
 			Help: "Total number of sent DHCP requests",
 	})
 	dhcpOffers = promauto.NewCounter(prometheus.CounterOpts{
-			Name: "dhcp_offers",
+			Name: "observer_dhcp_offers",
 			Help: "Total number of received DHCP offers",
 	})
 	dhcpFailures = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "dhcp_failures",
+		Name: "observer_dhcp_failures",
 		Help: "Total number of failed DHCP handshakes",
 	})
 	dchpHandshakeLatency = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "dhcp_latency",
+		Name: "observer_dhcp_latency",
 		Help: "Time between dhcp request and dhcp offer.",
 	})
 	dchpLeaseTime = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "dhcp_lease_time",
+		Name: "observer_dhcp_lease_time",
 		Help: "Time until DHCP lease will be renewed.",
 	})
 )
@@ -39,6 +39,7 @@ func init() {
 }
 
 func sampleDhcp(iface string, verbose bool) {
+	dhcpRequests.Inc()
 	client := client.NewClient()
 	start := time.Now()
 	conversation, err := client.Exchange(iface)
@@ -47,15 +48,13 @@ func sampleDhcp(iface string, verbose bool) {
 		fmt.Printf("DHCP Failed with %s.\n", err)
 		return
 	}
-	dchpHandshakeLatency.Set(float64(time.Since(start).Nanoseconds()))
+	dchpHandshakeLatency.Set(time.Since(start).Seconds())
 	for _, packet := range conversation {
-		if packet.MessageType() ==  dhcp.MessageTypeRequest {
-			dhcpRequests.Inc()	
-		} else if packet.MessageType() ==  dhcp.MessageTypeOffer {
+	 	if packet.MessageType() ==  dhcp.MessageTypeOffer {
 			dhcpOffers.Inc()
 		}
 		if packet.Options.Has(dhcp.OptionIPAddressLeaseTime) {
-			dchpLeaseTime.Set(float64(packet.IPAddressLeaseTime(0).Seconds()))
+			dchpLeaseTime.Set(packet.IPAddressLeaseTime(0).Seconds())
 		}
 		if verbose {
 			fmt.Println(packet.Summary())

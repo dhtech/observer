@@ -12,19 +12,19 @@ import (
 
 var (
 	dnsRequests = promauto.NewCounterVec(prometheus.CounterOpts{
-			Name: "dns_client_requests",
+			Name: "observer_dns_requests",
 			Help: "Total number of sent DNS requests",
 	}, []string{"resolver"})
 	dnsFailures = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "dns_client_failures",
+		Name: "observer_dns_failures",
 		Help: "Total number of failed DNS requests",
 	}, []string{"resolver"})
 	dnsLatency = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "dns_client_latency",
+		Name: "observer_dns_latency",
 		Help: "Latency of DNS reequest.",
 	}, []string{"resolver"})
 	dnsAge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "dns_client_age",
+		Name: "observer_dns_age",
 		Help: "Age of DNS healthcheck record.",
 	}, []string{"resolver"})
 )
@@ -36,23 +36,25 @@ func init() {
 
 func sampleDns(targets []string, qname string) {
 	for _, target := range targets {
+		f := dnsFailures.With(prometheus.Labels{
+			"resolver": target,
+		})
+		f.Add(float64(0))
+		dnsRequests.With(prometheus.Labels{
+			"resolver": target,
+		}).Inc()
 		c := dns.Client{}
 		m := dns.Msg{}
 		m.SetQuestion(qname, dns.TypeTXT)
 		start := time.Now()
 		r, _, err := c.Exchange(&m, fmt.Sprintf("%s:53", target))
-		dnsRequests.With(prometheus.Labels{
-			"resolver": target,
-		}).Inc()
 		if err != nil {
-			dnsFailures.With(prometheus.Labels{
-				"resolver": target,
-			}).Inc()
+			f.Inc()
 			return
 		}
 		dnsLatency.With(prometheus.Labels{
 			"resolver": target,
-		}).Set(float64(time.Since(start).Nanoseconds()))
+		}).Set(time.Since(start).Seconds())
 		if len(r.Answer) == 0 {
 			return
 		}
