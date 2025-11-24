@@ -42,12 +42,12 @@ func sampleIcmp(targets []string, count int) {
 		}
 		pinger.SetPrivileged(true)
 		pinger.Count = count
-		pinger.InterfaceName = *iface
+		pinger.InterfaceName = iface
 
 		var af string
-		if !*disable4 {
+		if !disable4 {
 			af = "ip6"
-		} else if !*disable6 {
+		} else if !disable6 {
 			af = "ip4"
 		} else {
 			af = "ip"
