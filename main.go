@@ -4,7 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -40,10 +42,13 @@ func main() {
 	flag.Parse()
 
 	if disable4 && disable6 {
-		log.Fatalf("You have to leave at least one address family enabled! Exiting")
+		slog.Error("both disable4 and disable6 flag set, needs at least one")
+		flag.Usage()
+		os.Exit(1)
 	}
 
-	fmt.Println("Starting observer.")
+	slog.Info("starting observer", "iface", iface, "icmp_targets", icmpTargets, "icmp_count", icmpCount, "interval", interval, "disable4", disable4, "disable6", disable6, "dns_qname", dnsQname, "dns_target", dnsTargets)
+
 	dnsTargetsList := strings.Split(dnsTargets, ",")
 	icmpTargetsList := strings.Split(icmpTargets, ",")
 	http.Handle("/metrics", promhttp.Handler())
@@ -55,34 +60,48 @@ func main() {
 
 	go func() {
 		for {
-			sampleDhcp(iface, verbose)
+			_, _, err := sampleDhcp(iface, verbose)
+			if err != nil {
+				slog.Warn("sampling dhcp", "err", err)
+			}
 			if len(dnsTargetsList) > 0 {
 				sampleDns(dnsTargetsList, dnsQname)
 			}
 			var addr *netlink.Addr
 			var addr6 *netlink.Addr
 			if !disable4 {
-				err, yourIPAddr, prefixBits := sampleDhcp(iface, verbose)
+				yourIPAddr, prefixBits, err := sampleDhcp(iface, verbose)
 				if err != nil {
-					log.Println("DHCPv4 check reported an error: ", err)
+					slog.Warn("sampling dhcp v4", "iface", iface, "err", err)
 				}
+
 				addr, err = netlink.ParseAddr(yourIPAddr.String() + "/" + strconv.Itoa(prefixBits))
 				if err != nil {
 					log.Fatalln(err)
 				}
-				netlink.AddrAdd(link, addr)
 
-			}
-			if !disable6 {
-				err, yourIP6Addr, prefix6Bits := sampleDhcp6(iface, verbose)
+				err = netlink.AddrAdd(link, addr)
 				if err != nil {
-					log.Println("DHCPv6 check reported an error: ", err)
+					slog.Warn("adding netlink", "link", link, "addr", addr, "err", err)
 				}
+			}
+
+			if !disable6 {
+				yourIP6Addr, prefix6Bits, err := sampleDhcp6(iface, verbose)
+				if err != nil {
+					slog.Warn("sampling dhcp v6", "iface", iface, "err", err)
+				}
+
 				addr6, err = netlink.ParseAddr(yourIP6Addr.String() + "/" + strconv.Itoa(prefix6Bits))
 				if err != nil {
-					log.Fatalln(err)
+					slog.Error("adding link", "addr6", addr6, "err", err)
+					os.Exit(1)
 				}
-				netlink.AddrAdd(link, addr6)
+
+				err = netlink.AddrAdd(link, addr6)
+				if err != nil {
+					slog.Warn("could not add netlink address", "link", link, "addr6", addr6, "err", err)
+				}
 			}
 
 			if icmpTargets != "" && len(icmpTargetsList) > 0 {
@@ -90,17 +109,25 @@ func main() {
 			}
 
 			if !disable4 {
-				netlink.AddrDel(link, addr)
+				err := netlink.AddrDel(link, addr)
+				if err != nil {
+					slog.Warn("deleting v4 netlink", "link", link, "addr", addr, "err", err)
+				}
 			}
+
 			if !disable6 {
-				netlink.AddrDel(link, addr6)
+				err := netlink.AddrDel(link, addr6)
+				if err != nil {
+					slog.Warn("deleting v6 netlink", "link", link, "addr", addr, "err", err)
+				}
 			}
+
 			time.Sleep(interval)
 		}
 	}()
 
 	hostAddress := fmt.Sprintf(":%d", hostPort)
-	fmt.Println(hostAddress)
+	slog.Info("starting observer", "host_address", hostAddress)
 	err = http.ListenAndServe(hostAddress, nil)
 	if err != nil {
 		panic(err)

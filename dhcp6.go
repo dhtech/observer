@@ -39,19 +39,19 @@ func init() {
 	prometheus.MustRegister(dhcp6Lifetime)
 }
 
-func sampleDhcp6(iface string, verbose bool) (error, net.IP, int) {
+func sampleDhcp6(iface string, verbose bool) (net.IP, int, error) {
 	dhcp6Requests.Inc()
 	client := client.NewClient()
 	start := time.Now()
 	conversation, err := client.Exchange(iface)
 	if err != nil {
 		dhcp6Failures.Inc()
-		return err, nil, 0
+		return nil, 0, err
 	}
 	dhcp6HandshakeLatency.Set(time.Since(start).Seconds())
 
 	var yourIPAddr net.IP
-	var prefixBits int = 128
+	var prefixBits = 128
 	for _, packet := range conversation {
 		if verbose {
 			fmt.Println(packet.Summary())
@@ -60,7 +60,7 @@ func sampleDhcp6(iface string, verbose bool) (error, net.IP, int) {
 		message, err := packet.GetInnerMessage()
 		if err != nil {
 			dhcp6Failures.Inc()
-			return err, nil, 0
+			return nil, 0, err
 		}
 
 		if message.MessageType == dhcp.MessageTypeReply {
@@ -73,5 +73,5 @@ func sampleDhcp6(iface string, verbose bool) (error, net.IP, int) {
 			yourIPAddr = naAddr.IPv6Addr
 		}
 	}
-	return nil, yourIPAddr, prefixBits
+	return yourIPAddr, prefixBits, err
 }
