@@ -39,14 +39,14 @@ func init() {
 	prometheus.MustRegister(dhcpLeaseTime)
 }
 
-func sampleDhcp(iface string, verbose bool) (error, net.IP, int) {
+func sampleDhcp(iface string, verbose bool) (net.IP, int, error) {
 	dhcpRequests.Inc()
 	client := client.NewClient()
 	start := time.Now()
 	conversation, err := client.Exchange(iface)
 	if err != nil {
 		dhcpFailures.Inc()
-		return err, nil, 0
+		return nil, 0, err
 	}
 	dhcpHandshakeLatency.Set(time.Since(start).Seconds())
 
@@ -70,5 +70,5 @@ func sampleDhcp(iface string, verbose bool) (error, net.IP, int) {
 			yourIPAddr = packet.YourIPAddr
 		}
 	}
-	return nil, yourIPAddr, prefixBits
+	return yourIPAddr, prefixBits, err
 }
