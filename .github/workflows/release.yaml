@@ -2,7 +2,7 @@ name: Release
 
 on:
   release:
-    types: [ "created" ]
+    types: [ "created", "edited" ]
 
 jobs:
   build:
@@ -31,25 +31,7 @@ jobs:
           tar -czf observer-${{ matrix.goarch }}-$TAG.tar.gz observer-${{ matrix.goarch }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: softprops/action-gh-release@v2
         with:
           name: observer-${{ matrix.goarch }}-${GITHUB_REF#refs/tags/}.tar.gz
           path: observer-${{ matrix.goarch }}-${GITHUB_REF#refs/tags/}.tar.gz
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v3
-        with:
-          path: .
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        if: github.ref_type == 'tag'
-        with:
-          files: |
-            observer-amd64-${GITHUB_REF#refs/tags/}.tar.gz
-            observer-arm64-${GITHUB_REF#refs/tags/}.tar.gz
-
