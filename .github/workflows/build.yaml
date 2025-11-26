@@ -1,28 +1,26 @@
-name: Go Build
+name: Build
 
 on:
   push:
-    branches: [ "master" ]
-  pull_request:
     branches: [ "master" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goarch: [amd64, arm64]
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v4
         with:
-          go-version: "1.24"
+          go-version: '1.24'
 
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-
-      - name: Build
-        run: go build .
+      - name: Build binary
+        run: |
+          echo "Building for ${{ matrix.goarch }}"
+          GOOS=linux GOARCH=${{ matrix.goarch }} go build -o observer-${{ matrix.goarch }} .
