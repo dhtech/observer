@@ -25,13 +25,28 @@ jobs:
           echo "Building for ${{ matrix.goarch }}"
           GOOS=linux GOARCH=${{ matrix.goarch }} go build -o observer-${{ matrix.goarch }} .
 
-      - name: Package binary
+      - name: Package artifacts
         run: |
-          TAG=${GITHUB_REF_NAME}
+          TAG=${{GITHUB_REF_NAME}}
           tar -czf observer-${{ matrix.goarch }}-$TAG.tar.gz observer-${{ matrix.goarch }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: observer-${{ matrix.goarch }}
+          path: observer-${{ matrix.goarch }}-${{GITHUB_REF_NAME}}.tar.gz
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          name: observer-${{ matrix.goarch }}-${GITHUB_REF_NAME}.tar.gz
-          files: observer-${{ matrix.goarch }}-${GITHUB_REF_NAME}.tar.gz
+          name: observer-${{GITHUB_REF_NAME}}
+          files: ./artifacts/**/*.tar.gz
