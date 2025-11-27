@@ -15,7 +15,7 @@ A lightweight network observer written in Go that monitors network interfaces, p
 ## installation
 
 ```bash
-git clone <repo-url>
+git clone git@github.com:dhtech/observer.git
 cd observer
 go build .
 ./observer
