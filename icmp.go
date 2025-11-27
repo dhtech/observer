@@ -29,7 +29,7 @@ func init() {
 	prometheus.MustRegister(icmpAvgRtt)
 }
 
-func sampleIcmp(targets []string, count int) {
+func sampleIcmp(targets []string, count int) error {
 	for _, target := range targets {
 		f := icmpSetupFailures.With(prometheus.Labels{
 			"target": target,
@@ -38,7 +38,7 @@ func sampleIcmp(targets []string, count int) {
 		pinger, err := probing.NewPinger(target)
 		if err != nil {
 			f.Inc()
-			return
+			return err
 		}
 		pinger.SetPrivileged(true)
 		pinger.Count = count
@@ -57,7 +57,7 @@ func sampleIcmp(targets []string, count int) {
 		err = pinger.Run()
 		if err != nil {
 			f.Inc()
-			return
+			return err
 		}
 
 		stats := pinger.Statistics()
@@ -77,4 +77,6 @@ func sampleIcmp(targets []string, count int) {
 			"resolved_addr": stats.IPAddr.String(),
 		}).Set(stats.AvgRtt.Seconds())
 	}
+
+	return nil
 }
