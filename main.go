@@ -28,7 +28,10 @@ var (
 	hostPort    int
 )
 
+var Version = "0-development"
+
 func main() {
+	slog.Info("running", "version", Version)
 	flag.StringVar(&iface, "interface", "", "Interface to operate on")
 	flag.StringVar(&icmpTargets, "icmp-targets", "", "Comma sepperated list with ICMP targets")
 	flag.IntVar(&icmpCount, "icmp-count", 3, "ICMP count")
