@@ -11,66 +11,71 @@ import (
 )
 
 var (
-	dnsRequests = promauto.NewCounterVec(prometheus.CounterOpts{
+	dnsRequestsCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "observer_dns_requests",
 		Help: "Total number of sent DNS requests",
 	}, []string{"resolver"})
-	dnsFailures = promauto.NewCounterVec(prometheus.CounterOpts{
+	dnsFailuresCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "observer_dns_failures",
 		Help: "Total number of failed DNS requests",
 	}, []string{"resolver"})
-	dnsLatency = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	dnsLatencyGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "observer_dns_latency",
 		Help: "Latency of DNS reequest.",
 	}, []string{"resolver"})
-	dnsAge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	dnsAgeGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "observer_dns_age",
 		Help: "Age of DNS healthcheck record.",
 	}, []string{"resolver"})
 )
 
 func init() {
-	prometheus.MustRegister(dnsLatency)
-	prometheus.MustRegister(dnsAge)
+	prometheus.MustRegister(dnsLatencyGauge)
+	prometheus.MustRegister(dnsAgeGauge)
 }
 
-func sampleDns(targets []string, qname string) {
+func sampleDns(targets []string, qname string) error {
 	for _, target := range targets {
-		f := dnsFailures.With(prometheus.Labels{
+
+		dnsFailures := dnsFailuresCounter.With(prometheus.Labels{
 			"resolver": target,
 		})
-		f.Add(float64(0))
-		dnsRequests.With(prometheus.Labels{
+
+		dnsRequestsCounter.With(prometheus.Labels{
 			"resolver": target,
 		}).Inc()
-		c := dns.Client{}
-		m := dns.Msg{}
-		m.SetQuestion(qname, dns.TypeTXT)
-		start := time.Now()
-		r, _, err := c.Exchange(&m, fmt.Sprintf("%s:53", target))
+
+		dnsClient := dns.Client{}
+		dnsMessage := dns.Msg{}
+		dnsMessage.SetQuestion(qname, dns.TypeTXT)
+
+		r, rtt, err := dnsClient.Exchange(&dnsMessage, fmt.Sprintf("%s:53", target))
 		if err != nil {
-			f.Inc()
-			return
+			dnsFailures.Inc()
+			return err
 		}
-		dnsLatency.With(prometheus.Labels{
-			"resolver": target,
-		}).Set(time.Since(start).Seconds())
+
 		if len(r.Answer) == 0 {
-			return
+			return fmt.Errorf("dns message lenght %d", len(r.Answer))
 		}
+
+		dnsLatencyGauge.With(prometheus.Labels{
+			"resolver": target,
+		}).Set(rtt.Seconds())
+
 		for _, ans := range r.Answer {
 			if t, ok := ans.(*dns.TXT); ok {
 				if len(t.Txt) > 0 {
 					stamp, err := strconv.Atoi(t.Txt[0])
 					if err != nil {
-						fmt.Println("Failed to parse healthcheck record")
-						return
+						return fmt.Errorf("failed to parse healthcheck record")
 					}
-					dnsAge.With(prometheus.Labels{
+					dnsAgeGauge.With(prometheus.Labels{
 						"resolver": target,
 					}).Set(float64(int(time.Now().Unix()) - stamp))
 				}
 			}
 		}
 	}
+	return nil
 }

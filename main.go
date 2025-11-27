@@ -60,13 +60,16 @@ func main() {
 
 	go func() {
 		for {
-			_, _, err := sampleDhcp(iface, verbose)
+			yourIPAddr, prefixBits, err := sampleDhcp(iface, verbose)
 			if err != nil {
-				slog.Warn("sampling dhcp", "err", err)
+				slog.Warn("sampling dhcp", "your_ip_addr", yourIPAddr, "prefix_bits", prefixBits, "err", err)
 			}
-			if len(dnsTargetsList) > 0 {
-				sampleDns(dnsTargetsList, dnsQname)
+
+			err = sampleDns(dnsTargetsList, dnsQname)
+			if err != nil {
+				slog.Warn("sampling DNS", "err", err)
 			}
+
 			var addr *netlink.Addr
 			var addr6 *netlink.Addr
 			if !disable4 {
@@ -77,7 +80,8 @@ func main() {
 
 				addr, err = netlink.ParseAddr(yourIPAddr.String() + "/" + strconv.Itoa(prefixBits))
 				if err != nil {
-					log.Fatalln(err)
+					slog.Error("parsing address", "err", err)
+					os.Exit(1)
 				}
 
 				err = netlink.AddrAdd(link, addr)
