@@ -49,4 +49,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: observer-${{ github.ref_name }}
-          files: ./artifacts/**/*.tar.gz
+          files: ./artifacts/**/*.gz
