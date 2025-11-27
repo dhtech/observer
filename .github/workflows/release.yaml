@@ -25,13 +25,13 @@ jobs:
           echo "Building for ${{ matrix.goarch }}"
           GOOS=linux GOARCH=${{ matrix.goarch }} go build -o observer-${{ matrix.goarch }} .
 
-      - name: Package binary as tar.gz with release tag
+      - name: Package binary
         run: |
-          TAG=${GITHUB_REF#refs/tags/}
+          TAG=${GITHUB_REF_NAME}
           tar -czf observer-${{ matrix.goarch }}-$TAG.tar.gz observer-${{ matrix.goarch }}
 
-      - name: Upload artifact
+      - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          name: observer-${{ matrix.goarch }}-${GITHUB_REF#refs/tags/}.tar.gz
-          path: observer-${{ matrix.goarch }}-${GITHUB_REF#refs/tags/}.tar.gz
+          name: observer-${{ matrix.goarch }}-${GITHUB_REF_NAME}.tar.gz
+          files: observer-${{ matrix.goarch }}-${GITHUB_REF_NAME}.tar.gz
