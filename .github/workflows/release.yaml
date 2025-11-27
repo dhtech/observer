@@ -27,8 +27,8 @@ jobs:
 
       - name: Package artifacts
         run: |
-          echo "Packaging artifacts for ${{ matrix.goarch }}-{{ github.ref_name }}"
-          gzip -c observer-${{ matrix.goarch }} > observer-${{ matrix.goarch }}-{{ github.ref_name }}.gz
+          echo "Packaging artifacts for ${{ matrix.goarch }}-${{ github.ref_name }}"
+          gzip -c observer-${{ matrix.goarch }} > observer-${{ matrix.goarch }}-${{ github.ref_name }}.gz
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
