@@ -24,7 +24,7 @@ jobs:
         run: |
           echo "Building for ${{ matrix.goarch }}"
           GOOS=linux GOARCH=${{ matrix.goarch }} go build \
-          -ldflags "-X github.com/dhtech/observer/main.Version=${{ github.ref_name }}" \
+          -ldflags "-X main.Version=${{ github.ref_name }}" \
           -o observer-${{ matrix.goarch }} .
 
       - name: Package artifacts
