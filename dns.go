@@ -2,9 +2,6 @@ package main
 
 import (
 	"fmt"
-	"strconv"
-	"time"
-
 	"github.com/miekg/dns"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -12,26 +9,20 @@ import (
 
 var (
 	dnsRequestsCounter = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "observer_dns_requests",
 		Help: "Total number of sent DNS requests",
 	}, []string{"resolver"})
 	dnsFailuresCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "observer_dns_failures",
 		Help: "Total number of failed DNS requests",
 	}, []string{"resolver"})
-	dnsLatencyGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "observer_dns_latency",
+	dnsRttGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "observer_dns_rtt",
 		Help: "Latency of DNS reequest.",
-	}, []string{"resolver"})
-	dnsAgeGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "observer_dns_age",
-		Help: "Age of DNS healthcheck record.",
 	}, []string{"resolver"})
 )
 
 func init() {
-	prometheus.MustRegister(dnsLatencyGauge)
-	prometheus.MustRegister(dnsAgeGauge)
+	prometheus.MustRegister(dnsRttGauge)
 }
 
 func sampleDns(targets []string, qname string) error {
@@ -52,30 +43,17 @@ func sampleDns(targets []string, qname string) error {
 		r, rtt, err := dnsClient.Exchange(&dnsMessage, fmt.Sprintf("%s:53", target))
 		if err != nil {
 			dnsFailures.Inc()
-			return err
+			return fmt.Errorf("could not complete dns exchange: %w", err)
 		}
 
 		if len(r.Answer) == 0 {
-			return fmt.Errorf("dns message lenght %d", len(r.Answer))
+			return fmt.Errorf("dns message %d : %s", len(r.Answer), r.Answer)
 		}
 
-		dnsLatencyGauge.With(prometheus.Labels{
+		dnsRttGauge.With(prometheus.Labels{
 			"resolver": target,
 		}).Set(rtt.Seconds())
 
-		for _, ans := range r.Answer {
-			if t, ok := ans.(*dns.TXT); ok {
-				if len(t.Txt) > 0 {
-					stamp, err := strconv.Atoi(t.Txt[0])
-					if err != nil {
-						return fmt.Errorf("failed to parse healthcheck record")
-					}
-					dnsAgeGauge.With(prometheus.Labels{
-						"resolver": target,
-					}).Set(float64(int(time.Now().Unix()) - stamp))
-				}
-			}
-		}
 	}
 	return nil
 }
