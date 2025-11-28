@@ -115,6 +115,13 @@ func observeIPv4(link netlink.Link) error {
 		return fmt.Errorf("parsing IPv4 address failed: %w", err)
 	}
 
+	addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+	for _, address := range addrs {
+		if address.IP.Equal(addr.IP) {
+			return nil
+		}
+	}
+
 	if err := netlink.AddrAdd(link, addr); err != nil {
 		slog.Warn("could not add IPv4 address", "addr", addr, "err", err)
 		return nil
@@ -137,6 +144,13 @@ func observeIPv6(link netlink.Link) error {
 	addr6, err := netlink.ParseAddr(ip6.String() + "/" + strconv.Itoa(prefix6))
 	if err != nil {
 		return fmt.Errorf("parsing IPv6 address failed: %w", err)
+	}
+
+	addrs, err := netlink.AddrList(link, netlink.FAMILY_V6)
+	for _, address := range addrs {
+		if address.IP.Equal(addr6.IP) {
+			return nil
+		}
 	}
 
 	if err := netlink.AddrAdd(link, addr6); err != nil {
