@@ -9,6 +9,7 @@ import (
 
 var (
 	dnsRequestsCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "observer_dns_requests",
 		Help: "Total number of sent DNS requests",
 	}, []string{"resolver"})
 	dnsFailuresCounter = promauto.NewCounterVec(prometheus.CounterOpts{
