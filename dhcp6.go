@@ -5,8 +5,8 @@ import (
 	"net"
 	"time"
 
-	dhcp "github.com/insomniacslk/dhcp/dhcpv6"
-	client "github.com/insomniacslk/dhcp/dhcpv6/client6"
+	"github.com/insomniacslk/dhcp/dhcpv6"
+	"github.com/insomniacslk/dhcp/dhcpv6/client6"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -39,9 +39,8 @@ func init() {
 	prometheus.MustRegister(dhcp6Lifetime)
 }
 
-func sampleDhcp6(iface string, verbose bool) (net.IP, int, error) {
+func sampleDhcp6(client client6.Client, verbose bool) (net.IP, int, error) {
 	dhcp6Requests.Inc()
-	client := client.NewClient()
 	start := time.Now()
 	conversation, err := client.Exchange(iface)
 	if err != nil {
@@ -63,7 +62,7 @@ func sampleDhcp6(iface string, verbose bool) (net.IP, int, error) {
 			return nil, 0, err
 		}
 
-		if message.MessageType == dhcp.MessageTypeReply {
+		if message.MessageType == dhcpv6.MessageTypeReply {
 			dhcp6Replies.Inc()
 
 			iaNa := message.Options.OneIANA()
@@ -73,5 +72,5 @@ func sampleDhcp6(iface string, verbose bool) (net.IP, int, error) {
 			yourIPAddr = naAddr.IPv6Addr
 		}
 	}
-	return yourIPAddr, prefixBits, err
+	return yourIPAddr, prefixBits, nil
 }

@@ -5,8 +5,8 @@ import (
 	"net"
 	"time"
 
-	dhcp "github.com/insomniacslk/dhcp/dhcpv4"
-	client "github.com/insomniacslk/dhcp/dhcpv4/client4"
+	"github.com/insomniacslk/dhcp/dhcpv4"
+	"github.com/insomniacslk/dhcp/dhcpv4/client4"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -39,9 +39,8 @@ func init() {
 	prometheus.MustRegister(dhcpLeaseTime)
 }
 
-func sampleDhcp(iface string, verbose bool) (net.IP, int, error) {
+func sampleDhcp(client client4.Client, verbose bool) (net.IP, int, error) {
 	dhcpRequests.Inc()
-	client := client.NewClient()
 	start := time.Now()
 	conversation, err := client.Exchange(iface)
 	if err != nil {
@@ -57,12 +56,12 @@ func sampleDhcp(iface string, verbose bool) (net.IP, int, error) {
 			fmt.Println(packet.Summary())
 		}
 
-		if packet.MessageType() == dhcp.MessageTypeOffer {
+		if packet.MessageType() == dhcpv4.MessageTypeOffer {
 			dhcpOffers.Inc()
 		}
 
-		if packet.MessageType() == dhcp.MessageTypeAck {
-			if packet.Options.Has(dhcp.OptionIPAddressLeaseTime) {
+		if packet.MessageType() == dhcpv4.MessageTypeAck {
+			if packet.Options.Has(dhcpv4.OptionIPAddressLeaseTime) {
 				dhcpLeaseTime.Set(packet.IPAddressLeaseTime(0).Seconds())
 			}
 
