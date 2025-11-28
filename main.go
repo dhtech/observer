@@ -128,6 +128,10 @@ func observeIPv4(link netlink.Link, client client4.Client) error {
 	}
 
 	addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+	if err != nil {
+		return fmt.Errorf("getting address list: %w", err)
+	}
+
 	for _, address := range addrs {
 		if address.IP.Equal(addr.IP) {
 			return nil
@@ -159,6 +163,10 @@ func observeIPv6(link netlink.Link, client client6.Client) error {
 	}
 
 	addrs, err := netlink.AddrList(link, netlink.FAMILY_V6)
+	if err != nil {
+		return fmt.Errorf("getting address list: %w", err)
+	}
+
 	for _, address := range addrs {
 		if address.IP.Equal(addr6.IP) {
 			return nil
