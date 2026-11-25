@@ -1,13 +1,14 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"time"
 
 	"github.com/insomniacslk/dhcp/dhcpv6"
-	"github.com/insomniacslk/dhcp/dhcpv6/client6"
+	"github.com/insomniacslk/dhcp/dhcpv6/nclient6"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -40,43 +41,59 @@ func init() {
 	prometheus.MustRegister(dhcp6Lifetime)
 }
 
-func sampleDhcp6(client client6.Client, verbose bool) (net.IP, int, error) {
+// sampleDhcp6 makes one whole stateful DHCPv6 handshake and returns the
+// address the server gave. Every message is waited for no longer than
+// timeout.
+func sampleDhcp6(timeout time.Duration, verbose bool) (net.IP, int, error) {
 	dhcp6Requests.Inc()
 	start := time.Now()
-	conversation, err := client.Exchange(iface)
+	reply, err := exchangeDhcp6(timeout, verbose)
 	if err != nil {
 		dhcp6Failures.Inc()
 		return nil, 0, err
 	}
 	dhcp6HandshakeLatency.Set(time.Since(start).Seconds())
+	dhcp6Replies.Inc()
 
-	var yourIPAddr net.IP
-	var prefixBits = 128
-	for _, packet := range conversation {
-		if verbose {
-			fmt.Println(packet.Summary())
-		}
-
-		message, err := packet.GetInnerMessage()
-		if err != nil {
-			dhcp6Failures.Inc()
-			return nil, 0, err
-		}
-
-		if message.MessageType == dhcpv6.MessageTypeReply {
-			dhcp6Replies.Inc()
-
-			naAddr, err := addressFromReply(message)
-			if err != nil {
-				dhcp6Failures.Inc()
-				return nil, 0, err
-			}
-
-			dhcp6Lifetime.Set(naAddr.ValidLifetime.Seconds())
-			yourIPAddr = naAddr.IPv6Addr
-		}
+	naAddr, err := addressFromReply(reply)
+	if err != nil {
+		dhcp6Failures.Inc()
+		return nil, 0, err
 	}
-	return yourIPAddr, prefixBits, nil
+
+	dhcp6Lifetime.Set(naAddr.ValidLifetime.Seconds())
+	return naAddr.IPv6Addr, 128, nil
+}
+
+// exchangeDhcp6 sends a solicit, takes the advertise, requests it and
+// returns the server's reply. It uses the library's nclient6, the
+// newer client, as the DHCPv4 check uses nclient4.
+func exchangeDhcp6(timeout time.Duration, verbose bool) (*dhcpv6.Message, error) {
+	// one try for every message, as before: a round must not grow long
+	opts := []nclient6.ClientOpt{nclient6.WithTimeout(timeout), nclient6.WithRetry(1)}
+	if verbose {
+		opts = append(opts, nclient6.WithDebugLogger())
+	}
+	client, err := nclient6.New(iface, opts...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = client.Close() }()
+
+	ctx := context.Background()
+	advertise, err := client.Solicit(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("no advertise: %w", err)
+	}
+
+	reply, err := client.Request(ctx, advertise)
+	if err != nil {
+		return nil, fmt.Errorf("no reply: %w", err)
+	}
+	if reply.MessageType != dhcpv6.MessageTypeReply {
+		return nil, fmt.Errorf("the request was answered with a %s, not a reply", reply.MessageType)
+	}
+	return reply, nil
 }
 
 // addressFromReply returns the address a DHCPv6 reply gives. A server
