@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload || true
+fi
+# purge: the settings somebody wrote for it go too
+if [ "$1" = purge ]; then
+    rm -f /etc/default/observer
+fi
+exit 0

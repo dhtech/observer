@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+# A first installation starts nothing: observer needs its settings
+# (/etc/default/observer), and whoever installs the package decides when
+# it runs. On an upgrade, an observer that is running continues as the
+# new version.
+if [ "$1" = configure ] && [ -d /run/systemd/system ]; then
+    systemctl daemon-reload || true
+    systemctl try-restart observer.service || true
+fi
+exit 0

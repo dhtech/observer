@@ -14,12 +14,30 @@ A lightweight network observer written in Go that monitors network interfaces, p
 
 ## installation
 
+### Debian package
+
+Every [release](https://github.com/dhtech/observer/releases) carries a Debian package for amd64 and arm64, `observer_<version>_<arch>.deb`: the program as `/usr/sbin/observer` and a systemd unit, `observer.service`. Installing it starts nothing. The unit reads the program's flags from `OBSERVER_OPTS` in `/etc/default/observer`, and is not started without that file:
+
+```bash
+apt install ./observer_<version>_arm64.deb
+echo 'OBSERVER_OPTS="-interface eth0 -dns 192.0.2.53,192.0.2.54 -icmp-targets ping.example.net"' > /etc/default/observer
+systemctl enable --now observer
+```
+
+It runs as root with the three capabilities the work takes (`CAP_NET_ADMIN`, `CAP_NET_RAW`, `CAP_NET_BIND_SERVICE`). After a change of the file: `systemctl restart observer`.
+
+### From source
+
 ```bash
 git clone git@github.com:dhtech/observer.git
 cd observer
 go build .
 ./observer
 ```
+
+## releasing
+
+A tag `vX.Y.Z` is a release: pushed, or made together with a release on the releases page. The workflow builds the packages and the plain binaries (`.github/build.sh`), installs and tries the package in a clean Debian container (`.github/try.sh`) and puts the files on the release.
 
 ## configuration
 

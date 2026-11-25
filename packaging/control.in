@@ -1,0 +1,17 @@
+Package: observer
+Version: @VERSION@
+Architecture: @ARCH@
+Maintainer: dhtech <dhtech@users.noreply.github.com>
+Installed-Size: @SIZE@
+Section: net
+Priority: optional
+Homepage: https://github.com/dhtech/observer
+Description: sees a network as a visitor's computer does, for Prometheus
+ observer acts as a visitor's computer on one network interface: it
+ asks for an address over DHCPv4 and DHCPv6, asks name servers a
+ question and pings targets, again and again, and serves what it saw
+ as Prometheus metrics on port 9023.
+ .
+ One static binary and the unit observer.service. A first installation
+ neither enables nor starts it: it needs its settings first
+ (OBSERVER_OPTS in /etc/default/observer, at least -interface).
