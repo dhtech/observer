@@ -11,8 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/insomniacslk/dhcp/dhcpv4/client4"
-	"github.com/insomniacslk/dhcp/dhcpv6/client6"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/vishvananda/netlink"
 )
@@ -94,29 +92,19 @@ func main() {
 	}
 	icmpTargetsList := splitList(icmpTargets)
 
-	ipv4DhcpClient := client4.Client{
-		ReadTimeout:  interval,
-		WriteTimeout: interval,
-	}
-
-	ipv6DhcpClient := client6.Client{
-		ReadTimeout:  interval,
-		WriteTimeout: interval,
-	}
-
 	http.Handle("/metrics", promhttp.Handler())
 
 	go func() {
 		for {
 
 			if !disableDhcp4 {
-				if err := observeIPv4(link, ipv4DhcpClient); err != nil {
+				if err := observeIPv4(link); err != nil {
 					slog.Warn("issue with ipv4", "err", err)
 				}
 			}
 
 			if !disableDhcp6 {
-				if err := observeIPv6(link, ipv6DhcpClient); err != nil {
+				if err := observeIPv6(link); err != nil {
 					slog.Warn("issue with ipv6", "err", err)
 				}
 			}
@@ -162,8 +150,8 @@ func splitList(list string) []string {
 	return entries
 }
 
-func observeIPv4(link netlink.Link, client client4.Client) error {
-	ip, prefix, err := sampleDhcp(client, verbose)
+func observeIPv4(link netlink.Link) error {
+	ip, prefix, err := sampleDhcp(interval, verbose)
 	if err != nil {
 		return fmt.Errorf("DHCPv4 sampling failed: %w", err)
 	}
@@ -197,8 +185,8 @@ func observeIPv4(link netlink.Link, client client4.Client) error {
 	return nil
 }
 
-func observeIPv6(link netlink.Link, client client6.Client) error {
-	ip6, prefix6, err := sampleDhcp6(client, verbose)
+func observeIPv6(link netlink.Link) error {
+	ip6, prefix6, err := sampleDhcp6(interval, verbose)
 	if err != nil {
 		return fmt.Errorf("DHCPv6 sampling failed: %w", err)
 	}

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/insomniacslk/dhcp/dhcpv4"
 	"github.com/insomniacslk/dhcp/dhcpv6"
 	"github.com/miekg/dns"
 	"github.com/prometheus/client_golang/prometheus"
@@ -61,6 +62,21 @@ func TestAddressOf(t *testing.T) {
 	}
 	if got := addressOf([]net.IP{v6}, false); got != nil {
 		t.Errorf("the IPv4 address of an IPv6-only target: %v", got)
+	}
+}
+
+func TestAddressOfAck(t *testing.T) {
+	ack, err := dhcpv4.New(
+		dhcpv4.WithMessageType(dhcpv4.MessageTypeAck),
+		dhcpv4.WithYourIP(net.ParseIP("192.0.2.21")),
+		dhcpv4.WithNetmask(net.CIDRMask(25, 32)),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	address, prefixBits := addressOfAck(ack)
+	if !address.Equal(net.ParseIP("192.0.2.21")) || prefixBits != 25 {
+		t.Errorf("an acknowledgement of 192.0.2.21/25: got %v/%d", address, prefixBits)
 	}
 }
 
