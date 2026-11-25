@@ -1,54 +1,57 @@
 name: Release
 
+# A tag vX.Y.Z - pushed, or made together with a release on the releases
+# page - builds the release (.github/build.sh), installs and tries the
+# Debian package in a new debian:13 container that has only the package
+# (.github/try.sh), and puts on the GitHub release of that tag, for
+# amd64 and arm64:
+#
+#   observer_<version>_<arch>.deb    the Debian package, with a systemd unit
+#   observer-<arch>-v<version>.gz    the binary alone, as before
+#   SHA256SUMS
+#
+# The files of a release are put there once: changing the release's
+# text afterwards builds nothing again.
+
 on:
-  release:
-    types: [ "created", "edited" ]
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        goarch: [amd64, arm64]
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
+      # the latest stable Go release, whatever it is on the day
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v7
         with:
-          go-version: '1.24'
+          go-version: stable
+          check-latest: true
 
-      - name: Build binary
+      - run: go version
+
+      - name: Build the binaries and the packages
+        run: sh .github/build.sh "${GITHUB_REF_NAME#v}"
+
+      - name: Install and try the package on a machine with nothing else
+        run: >
+          docker run --rm --cap-add NET_ADMIN --cap-add NET_RAW
+          -v "$PWD:/src:ro" -w /src debian:13
+          sh .github/try.sh "${GITHUB_REF_NAME#v}"
+
+      # the release is made here unless the releases page made it already
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          echo "Building for ${{ matrix.goarch }}"
-          GOOS=linux GOARCH=${{ matrix.goarch }} go build \
-          -ldflags "-X main.Version=${{ github.ref_name }}" \
-          -o observer-${{ matrix.goarch }} .
-
-      - name: Package artifacts
-        run: |
-          echo "Packaging artifacts for ${{ matrix.goarch }}-${{ github.ref_name }}"
-          gzip -c observer-${{ matrix.goarch }} > observer-${{ matrix.goarch }}-${{ github.ref_name }}.gz
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: observer-${{ matrix.goarch }}
-          path: observer-${{ matrix.goarch }}-${{ github.ref_name }}.gz
-  release:
-    runs-on: ubuntu-latest
-    needs: build
-
-    steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: ./artifacts
-
-      - name: Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: observer-${{ github.ref_name }}
-          files: ./artifacts/**/*.gz
+          gh release view "${GITHUB_REF_NAME}" > /dev/null 2>&1 ||
+            gh release create "${GITHUB_REF_NAME}" \
+              --title "observer-${GITHUB_REF_NAME}" --generate-notes
+          gh release upload "${GITHUB_REF_NAME}" dist/*

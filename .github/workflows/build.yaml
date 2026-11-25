@@ -3,29 +3,40 @@ name: Build
 on:
   push:
     branches: [ "master" ]
+  pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        goarch: [amd64, arm64]
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
+      # the latest stable Go release, whatever it is on the day
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v7
         with:
-          go-version: '1.24'
+          go-version: stable
+          check-latest: true
+
+      - run: go version
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
 
-      - name: Build binary
-        run: |
-          echo "Building for ${{ matrix.goarch }}"
-          GOOS=linux GOARCH=${{ matrix.goarch }} go build \
-          -ldflags "-X main.Version=${{ github.ref_name }}" \
-          -o observer-${{ matrix.goarch }} .
+      - run: go test ./...
+
+      # what a release would carry, for amd64 and arm64, so that a
+      # broken package is seen here and not at the release
+      - name: Build the binaries and the packages
+        run: sh .github/build.sh 0.0.0
+
+      - name: Install and try the package on a machine with nothing else
+        run: >
+          docker run --rm --cap-add NET_ADMIN --cap-add NET_RAW
+          -v "$PWD:/src:ro" -w /src debian:13
+          sh .github/try.sh 0.0.0

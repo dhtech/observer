@@ -1,0 +1,34 @@
+# observer - sees the network as a visitor's computer does.
+#
+# Its settings are OBSERVER_OPTS in /etc/default/observer: the switches
+# of "observer -help". -interface must be there. For example:
+#
+#   OBSERVER_OPTS="-interface eth0 -dns 192.0.2.53,192.0.2.54 -icmp-targets ping.example.net"
+#
+# Without that file there is nothing to observe, and the unit is not
+# started (it is skipped, not failed).
+#
+# It runs as root, with no more privilege than the work takes: setting
+# the address it was given on the interface (NET_ADMIN), the raw
+# sockets of DHCP and ping (NET_RAW) and the DHCP client ports
+# (NET_BIND_SERVICE). It writes nothing to the disk.
+[Unit]
+Description=observer - sees the network as a visitor's computer does
+Documentation=https://github.com/dhtech/observer
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/default/observer
+
+[Service]
+EnvironmentFile=/etc/default/observer
+ExecStart=/usr/sbin/observer $OBSERVER_OPTS
+Restart=always
+RestartSec=5
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

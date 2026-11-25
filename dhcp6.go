@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -65,12 +66,30 @@ func sampleDhcp6(client client6.Client, verbose bool) (net.IP, int, error) {
 		if message.MessageType == dhcpv6.MessageTypeReply {
 			dhcp6Replies.Inc()
 
-			iaNa := message.Options.OneIANA()
-			naAddr := *iaNa.Options.OneAddress()
+			naAddr, err := addressFromReply(message)
+			if err != nil {
+				dhcp6Failures.Inc()
+				return nil, 0, err
+			}
 
 			dhcp6Lifetime.Set(naAddr.ValidLifetime.Seconds())
 			yourIPAddr = naAddr.IPv6Addr
 		}
 	}
 	return yourIPAddr, prefixBits, nil
+}
+
+// addressFromReply returns the address a DHCPv6 reply gives. A server
+// that has none to give answers without one: that is a failed
+// handshake, told as an error.
+func addressFromReply(message *dhcpv6.Message) (*dhcpv6.OptIAAddress, error) {
+	iaNa := message.Options.OneIANA()
+	if iaNa == nil {
+		return nil, errors.New("DHCPv6 reply holds no IA_NA")
+	}
+	naAddr := iaNa.Options.OneAddress()
+	if naAddr == nil {
+		return nil, errors.New("DHCPv6 reply holds no address")
+	}
+	return naAddr, nil
 }

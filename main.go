@@ -25,9 +25,16 @@ var (
 	verbose     bool
 	disable4    bool
 	disable6    bool
-	dnsQname    string
-	dnsTargets  string
-	hostPort    int
+	// one switch for every check
+	disableDhcp4 bool
+	disableDhcp6 bool
+	disableDns4  bool
+	disableDns6  bool
+	disableIcmp4 bool
+	disableIcmp6 bool
+	dnsQname     string
+	dnsTargets   string
+	hostPort     int
 )
 
 var Version = "0-development"
@@ -39,10 +46,16 @@ func main() {
 	flag.IntVar(&icmpCount, "icmp-count", 3, "ICMP count")
 	flag.DurationVar(&interval, "interval", time.Second*5, "Interval in seconds to collect prometheus metrics")
 	flag.BoolVar(&verbose, "verbose", false, "Toggles verbose logging")
-	flag.BoolVar(&disable4, "disable4", false, "Disable all IPv4 client behaviour - DHCPv4 and ICMPv4")
-	flag.BoolVar(&disable6, "disable6", false, "Disable all IPv6 client behaviour - DHCPv6 and ICMPv6")
+	flag.BoolVar(&disable4, "disable4", false, "Disable all IPv4 client behaviour - DHCPv4, DNS and ICMP over IPv4")
+	flag.BoolVar(&disable6, "disable6", false, "Disable all IPv6 client behaviour - DHCPv6, DNS and ICMP over IPv6")
+	flag.BoolVar(&disableDhcp4, "disable-dhcp4", false, "Disable the DHCPv4 check")
+	flag.BoolVar(&disableDhcp6, "disable-dhcp6", false, "Disable the DHCPv6 check")
+	flag.BoolVar(&disableDns4, "disable-dns4", false, "Disable the DNS check of the IPv4 resolvers")
+	flag.BoolVar(&disableDns6, "disable-dns6", false, "Disable the DNS check of the IPv6 resolvers")
+	flag.BoolVar(&disableIcmp4, "disable-icmp4", false, "Disable ICMP over IPv4")
+	flag.BoolVar(&disableIcmp6, "disable-icmp6", false, "Disable ICMP over IPv6")
 	flag.StringVar(&dnsQname, "qname", "healthcheck.event.dreamhack.se.", "DNS healthcheck qname to probe.")
-	flag.StringVar(&dnsTargets, "dns", "", "DNS servers to probe, separate by comma.")
+	flag.StringVar(&dnsTargets, "dns", "", "DNS servers to probe, IPv4 and IPv6 addresses, separate by comma.")
 	flag.IntVar(&hostPort, "host-port", 9023, "The port to listen on. Default: 9023")
 	flag.Parse()
 
@@ -52,8 +65,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	if disable4 && disable6 {
-		slog.Error("both disable4 and disable6 flag set, needs at least one")
+	// -disable4 and -disable6 are every check of that family
+	if disable4 {
+		disableDhcp4, disableDns4, disableIcmp4 = true, true, true
+	}
+	if disable6 {
+		disableDhcp6, disableDns6, disableIcmp6 = true, true, true
+	}
+
+	if disableDhcp4 && disableDhcp6 && disableDns4 && disableDns6 && disableIcmp4 && disableIcmp6 {
+		slog.Error("every check is disabled, needs at least one")
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -63,10 +84,15 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	slog.Info("starting observer", "iface", iface, "icmp_targets", icmpTargets, "icmp_count", icmpCount, "interval", interval, "disable4", disable4, "disable6", disable6, "dns_qname", dnsQname, "dns_target", dnsTargets)
+	slog.Info("starting observer", "iface", iface, "icmp_targets", icmpTargets, "icmp_count", icmpCount, "interval", interval, "dns_qname", dnsQname, "dns_target", dnsTargets,
+		"disable_dhcp4", disableDhcp4, "disable_dhcp6", disableDhcp6, "disable_dns4", disableDns4, "disable_dns6", disableDns6, "disable_icmp4", disableIcmp4, "disable_icmp6", disableIcmp6)
 
-	dnsTargetsList := strings.Split(dnsTargets, ",")
-	icmpTargetsList := strings.Split(icmpTargets, ",")
+	dns4TargetsList, dns6TargetsList, err := splitFamilies(splitList(dnsTargets))
+	if err != nil {
+		slog.Error("-dns", "err", err)
+		os.Exit(1)
+	}
+	icmpTargetsList := splitList(icmpTargets)
 
 	ipv4DhcpClient := client4.Client{
 		ReadTimeout:  interval,
@@ -83,23 +109,31 @@ func main() {
 	go func() {
 		for {
 
-			if !disable4 {
+			if !disableDhcp4 {
 				if err := observeIPv4(link, ipv4DhcpClient); err != nil {
 					slog.Warn("issue with ipv4", "err", err)
 				}
 			}
 
-			if !disable6 {
+			if !disableDhcp6 {
 				if err := observeIPv6(link, ipv6DhcpClient); err != nil {
 					slog.Warn("issue with ipv6", "err", err)
 				}
 			}
 
-			if err := sampleDns(dnsTargetsList, dnsQname); err != nil {
-				slog.Warn("issue with DNS sampling", "err", err)
+			if !disableDns4 {
+				if err := sampleDns(dns4Metrics, dns4TargetsList, dnsQname); err != nil {
+					slog.Warn("issue with DNS sampling over IPv4", "err", err)
+				}
 			}
 
-			if err := sampleIcmp(icmpTargetsList, icmpCount); err != nil {
+			if !disableDns6 {
+				if err := sampleDns(dns6Metrics, dns6TargetsList, dnsQname); err != nil {
+					slog.Warn("issue with DNS sampling over IPv6", "err", err)
+				}
+			}
+
+			if err := sampleIcmp(icmpTargetsList, icmpCount, !disableIcmp4, !disableIcmp6); err != nil {
 				slog.Warn("issue sampling icmp", "err", err)
 			}
 
@@ -114,6 +148,18 @@ func main() {
 		slog.Error("http server", "err", err)
 		os.Exit(1)
 	}
+}
+
+// splitList returns the entries of a comma separated list. An empty
+// list has none: a check that was given nothing to ask is not made.
+func splitList(list string) []string {
+	var entries []string
+	for _, entry := range strings.Split(list, ",") {
+		if entry = strings.TrimSpace(entry); entry != "" {
+			entries = append(entries, entry)
+		}
+	}
+	return entries
 }
 
 func observeIPv4(link netlink.Link, client client4.Client) error {
